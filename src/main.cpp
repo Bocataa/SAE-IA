@@ -7,6 +7,7 @@
 #include <Arduino.h> // Include the Arduino library
 #include "model.h" // Include the model header file
 #include "trafficsigns.h"
+#include "math.h"
 
 #define NBLABELS 28
 #define SEUILSOFTMAX 0.85
@@ -19,6 +20,23 @@ unsigned long CurrentTime;
 
 int cpt = 0;
 
+// Fonction pour convertir le rgb 565 en RGB 8 bits
+void rgb565_to_rgb888(unsigned short rgb565, int* red8, int* green8, int* blue8) {
+  // Decalage de la valeur rouge a droite de 11 bits.
+  unsigned char red5 = rgb565 >> 11;
+  // Decalage de la valeur verte a droite de 5 bits et extraction des 6 bits inferieurs.
+  unsigned char green6 = (rgb565 >> 5) & 0b111111;
+  // Extraction des 5 bits inferieurs.
+  unsigned char blue5 = rgb565 & 0b11111;
+
+  // Conversion du rouge 5 bits en rouge 8 bits.
+  *red8 = round((float)red5 / 31 * 255);
+  // Conversion du vert 6 bits en vert 8 bits.
+  *green8 = round((float)green6 / 63 * 255);
+  // Conversion du bleu 5 bits en bleu 8 bits.
+  *blue8 = round((float)blue5 / 31 * 255);
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Ready !");
@@ -26,7 +44,7 @@ void setup() {
   // Initialisation des entrées avec des valeurs réelles de trafficsigns
 for (int i = 0; i < 32; i++) {   // Hauteur de l'image (ex: 32x32)
   for (int j = 0; j < 32; j++) { // Largeur de l'image
-    uint16_t pixel = trafficsign2[i * 32 + j]; // Récupère le pixel en 16 bits
+    uint16_t pixel = trafficsign2[i * 32 + j]; // Récupère le pixel en 16 bits trafficsignX remplacer par image souhaitée
 
     // Extraction des composants RGB
     inputs[i][j][0] = (pixel >> 11) & 0x1F; // Rouge (5 bits)
@@ -46,7 +64,7 @@ void loop() {
 
     CurrentTime = micros(); // Fin du chrono (temps = currentTime-StartTime)
 
-    printf("Temps d'inférence = %f\n", CurrentTime - StartTime);
+    printf("Temps d'inférence = %f\n\n", CurrentTime - StartTime);
     // TODO : Ajoutez ici votre code pour calculer le softmax,
       int label = 0;
       float sum = 0;
@@ -58,17 +76,15 @@ void loop() {
           label = i;
         }
       }
+
       //calculate prediction accuracy with softmax
       float softmax[NBLABELS];
+
       for (int i = 0; i < NBLABELS; i++) {
         softmax[i] = exp(outputs[i]/100) / sum;
       }
       Serial.printf("Confidence : %.2f%%\n\n", softmax[label] * 100); //print the confidence of the prediction
 
-    // afficher la classe prédite  
-    // et calculer le temps d'inférence
-
-    // TODO ...
 
     // Print the label predicted
     if(softmax[label] >= SEUILSOFTMAX) { // Seuil de confiance
@@ -103,7 +119,7 @@ void loop() {
         case 27 : Serial.println("Class Predicted : End of game"); break;
         default : Serial.println("Error !"); break;
       }
-      cpt++;
+      //cpt++;
     } else {
       Serial.println("No class detected");
     }
