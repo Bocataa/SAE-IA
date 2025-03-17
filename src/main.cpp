@@ -10,13 +10,13 @@
 #include "math.h"
 
 #define NBLABELS 28
-#define SEUILSOFTMAX 0.85
+#define SEUILSOFTMAX 0.001
 
 static input_t inputs;
 static output_t outputs;
 
-unsigned long StartTime;
-unsigned long CurrentTime;
+float StartTime;
+float CurrentTime;
 
 int cpt = 0;
 
@@ -37,14 +37,11 @@ void rgb565_to_rgb888(unsigned short rgb565, int* red8, int* green8, int* blue8)
   *blue8 = round((float)blue5 / 31 * 255);
 }
 
-void setup() {
-  Serial.begin(115200);
-  Serial.println("Ready !");
-
-  // Initialisation des entrées avec des valeurs réelles de trafficsigns
+void pixelProcess32(const unsigned short *trafficSign){
+    // Initialisation des entrées avec des valeurs réelles de trafficsigns
 for (int i = 0; i < 32; i++) {   // Hauteur de l'image (ex: 32x32)
   for (int j = 0; j < 32; j++) { // Largeur de l'image
-    uint16_t pixel = trafficsign2[i * 32 + j]; // Récupère le pixel en 16 bits trafficsignX remplacer par image souhaitée
+    uint16_t pixel = trafficSign[i * 32 + j]; // Récupère le pixel en 16 bits trafficsignX remplacer par image souhaitée
 
     // Extraction des composants RGB
     inputs[i][j][0] = (pixel >> 11) & 0x1F; // Rouge (5 bits)
@@ -54,17 +51,56 @@ for (int i = 0; i < 32; i++) {   // Hauteur de l'image (ex: 32x32)
 }
 }
 
-void loop() {
-  if (cpt == 0) {
 
-    StartTime = micros(); // démarre un chrono pour calculer temps inference
+void pixelProcess43(const unsigned short *trafficSign){
+  uint8_t Xstart = (43-32)/2;
+  uint8_t Ystart = (43-32)/2; // Va rogner l'image est les pixels au delà seront perdus
+
+  // Initialisation des entrées avec des valeurs réelles de trafficsigns
+for (int i = 0; i < 32; i++) {   // Hauteur de l'image (ex: 32x32)
+  for (int j = 0; j < 32; j++) { // Largeur de l'image
+    uint16_t pixel = trafficSign[(i+Ystart)*43+(j+Xstart)]; // Récupère le pixel en 16 bits trafficsignX remplacer par image souhaitée
+
+    // Extraction des composants RGB
+    inputs[i][j][0] = (pixel >> 11) & 0x1F; // Rouge (5 bits)
+    inputs[i][j][1] = (pixel >> 5) & 0x3F;  // Vert (6 bits)
+    inputs[i][j][2] = pixel & 0x1F;         // Bleu (5 bits)
+  }
+}
+  
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Ready !");
+
+  
+}
+
+void loop() {
+  if (cpt <= 2) {
+    switch (cpt)
+    {
+    case 0:
+      pixelProcess32(trafficsign1);
+      break;
+    case 1: 
+      pixelProcess32(trafficsign2);
+      break;
+    case 2:
+      pixelProcess43(trafficsign3);
+      break;
+    }
+
+    
+    StartTime = micros(); // démarre un chrono pour calculer temps inference en microseconds
 
     // Cette fonction réalise l'inférence du modèle
     cnn(inputs, outputs);
 
     CurrentTime = micros(); // Fin du chrono (temps = currentTime-StartTime)
 
-    printf("Temps d'inférence = %f\n\n", CurrentTime - StartTime);
+    printf("Temps d'inference = %.6f ms\n\n", (CurrentTime - StartTime)/1000);
     // TODO : Ajoutez ici votre code pour calculer le softmax,
       int label = 0;
       float sum = 0;
@@ -83,7 +119,7 @@ void loop() {
       for (int i = 0; i < NBLABELS; i++) {
         softmax[i] = exp(outputs[i]/100) / sum;
       }
-      Serial.printf("Confidence : %.2f%%\n\n", softmax[label] * 100); //print the confidence of the prediction
+      Serial.printf("Confidence sign[%d] : %.2f%%\n\n", cpt, softmax[label] * 100); //print the confidence of the prediction
 
 
     // Print the label predicted
@@ -119,7 +155,12 @@ void loop() {
         case 27 : Serial.println("Class Predicted : End of game"); break;
         default : Serial.println("Error !"); break;
       }
-      //cpt++;
+      if(cpt > 2){
+        Serial.println("Fin du programme");
+      }
+      else {
+        cpt++;
+        }
     } else {
       Serial.println("No class detected");
     }
