@@ -72,6 +72,7 @@ for (int i = 0; i < 32; i++) {   // Hauteur de l'image (ex: 32x32)
 
 void setup() {
   Serial.begin(115200);
+  delay(10);
   Serial.println("Ready !");
 
   
